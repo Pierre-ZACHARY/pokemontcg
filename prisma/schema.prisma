@@ -1,0 +1,180 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = env("PRISMA_CLIENT")
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Game{
+  id Int @id @default(autoincrement())
+  name String @unique // name of the game exemple : Pokemon
+  series Series[] // list of series for this game
+  users User[] // list of users who have this game selected
+}
+
+model Series{
+  id Int @id @default(autoincrement())
+  name String @unique // name of the series, exemple : Scarlet & Violet
+  acronym String @unique // acronym of the series, exemple : SV
+  game Game @relation(fields: [gameId], references: [id])
+  gameId Int
+  extensions Extension[] // list of extensions for this series
+}
+
+model Extension{
+  id Int @id @default(autoincrement())
+  name String // name of the extension, exemple : Paldea evolved
+  acronym String @unique // acronym of the extension, exemple : SV02
+  series Series @relation(fields: [seriesId], references: [id])
+  seriesId Int
+  cards Card[] // list of cards for this extension
+  boosters Booster[] // list of boosters for this extension
+  users User[] // list of users who have this extension selected
+  @@unique([name, seriesId])
+}
+
+model Rarity{
+  id Int @id @default(autoincrement())
+  name String @unique // name of the rarity, exemple : Common
+  color String // color of the rarity, exemple : #000000
+  cards Card[] // list of cards for this rarity
+}
+
+model Card{
+  id Int @id @default(autoincrement())
+  cardId String @unique // id of the card, exemple : SV02-001
+  hp Int
+  extension Extension @relation(fields: [extensionId], references: [id])
+  extensionId Int
+  rarity Rarity @relation(fields: [rarityId], references: [id])
+  rarityId Int
+  cardI18n CardI18n[] // list of translations for this card
+  collections Collection[] // list of collections for this card
+  ownedBoosters OwnedBooster[] // list of boosters for this card
+  wishes Wish[] // list of wishes for this card
+}
+
+model CardI18n{
+  id Int @id @default(autoincrement())
+  language String
+  name String
+  imgUrl String
+  card Card @relation(fields: [cardId], references: [cardId], onDelete: Cascade)
+  cardId String
+  @@unique([cardId, language])
+}
+
+model User {
+  id Int @id @default(autoincrement())
+  discordId String @unique // used to retrieve username and avatar
+  coins Int @default(0)
+  language String @default("fr")
+  boosterLimit Int @default(3) // number of boosters a user can purchase per day
+  collections Collection[] // list of collections for this user
+  boosters OwnedBooster[] // list of boosters for this user
+  purchasedGoods OwnedGoods[] @relation(name: "purchaser")// list of purchased goods for this user
+  openedGoods OpenedGoods[]// list of opened goods for this user
+  dailyCoins Int @default(300) // number of coins the user can received today
+  dailyCoinsReceived Int @default(0) // number of coins the user received today
+  lastClaim DateTime? // last time the user claimed his daily coins
+  wishes Wish[] // list of wishes for this user
+  selectedGame Game? @relation(references: [id], fields: [selectedGameId]) // game selected by the user
+  selectedGameId Int?  // game selected by the user
+  selectedExtension Extension? @relation(references: [id], fields: [selectedExtensionId]) // extension selected by the user
+  selectedExtensionId Int? // extension selected by the user
+}
+
+model Server{
+  id Int @id @default(autoincrement())
+  discordId String @unique // used to retrieve name and icon
+  collections Collection[] // list of collections in this server
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopId Int @unique
+  wishes Wish[] // list of wishes in this server
+  openedGoods OpenedGoods[] // list of opened goods in this server
+}
+
+model Collection{
+  id Int @id @default(autoincrement())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  server Server @relation(fields: [serverId], references: [discordId])
+  serverId String
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardId Int
+  @@unique([cardId, serverId]) // only one card per server
+}
+
+model Booster{ // booster is just the visual + the price
+  id Int @id @default(autoincrement())
+  imgUrl String
+  price Int
+  extension Extension @relation(fields: [extensionId], references: [id])
+  extensionId Int
+  ownedBooster OwnedBooster[] // list of boosters for this extension
+  goods Goods[] // goods on which the booster can appear
+  shops Shop[]
+}
+
+model OwnedBooster{
+  id Int @id @default(autoincrement())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  booster Booster @relation(fields: [boosterId], references: [id], onDelete: Cascade)
+  boosterId Int
+  cards Card[]
+}
+
+model Goods{
+  id Int @id @default(autoincrement())
+  name String @unique
+  price Int // price in coins
+  imgUrl String
+  shops Shop[] // available to purchase in shops
+  boosters Booster[] // list of boosters that the good contains, each user may obtain one or two randomly, there is no limit of opening / boosters other than time limit
+  ownedGoods OwnedGoods[] // list of owned goods for this good
+  openedGoods OpenedGoods[] // list of opened goods for this good
+}
+
+model OwnedGoods{
+  id Int @id @default(autoincrement())
+  goods Goods @relation(fields: [goodsId], references: [id])
+  goodsId Int
+  purchasedAt DateTime // users have 30 minutes to open the goods
+  purchaser User @relation(name: "purchaser", fields: [purchaserId], references: [discordId])
+  purchaserId String
+}
+
+model OpenedGoods{
+  id Int @id @default(autoincrement())
+  goods Goods @relation(fields: [goodsId], references: [id])
+  goodsId Int
+  openedBy User[]
+  channelId String // channel on which the good was bought
+  server Server @relation(fields: [serverId], references: [discordId])
+  serverId String
+}
+
+model Shop{
+  id Int @id @default(autoincrement())
+  lastUpdated DateTime @default(now())
+  server Server?
+  serverId String? @unique
+  goods Goods[] // list of goods for this shop
+  boosters Booster[]
+}
+
+model Wish{
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  server Server @relation(fields: [serverId], references: [discordId])
+  serverId String
+  @@unique([cardId, userId, serverId])
+}
