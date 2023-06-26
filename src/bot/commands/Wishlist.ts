@@ -1,7 +1,8 @@
-import {CommandInteraction, Client, EmbedBuilder} from "discord.js";
+import {CommandInteraction, Client, EmbedBuilder, ButtonBuilder, ButtonStyle} from "discord.js";
 import { Command } from "../Command";
 import {ApplicationCommandOptionType_USER} from "./Collection";
 import {prisma} from "../../prisma";
+import {discordUserRedis} from "../utils/redisWrapper";
 
 declare global {
     interface String {
@@ -20,50 +21,90 @@ String.prototype.fmt = function (...values: any[]): string {
 String.prototype.capitalize = function (): string {
     return this.charAt(0).toUpperCase() + this.slice(1);
 }
-async function displayWishlist(target: string, client: Client, interaction: CommandInteraction ){
-    const targetWishlist = await prisma.wish.findMany({
-        where: {
-            user: {
-                discordId: target
-            },
-            serverId: interaction.guildId!
-        },
-        include: {
-            card: {
-                include: {
-                    cardI18n: true
-                }
-            }
-        }
-    });
-    const prismaUser = await prisma.user.findUnique({
-        where: {
-            discordId: interaction.user.id
-        }
-    });
-    console.assert(prismaUser !== null, "prismaUser !== null")
-    const discordUser = await client.users.fetch(target); // TODO put this on redis
+
+const MAX_WISHLIST = 20;
+export const ApplicationCommandOptionType_INTEGER = 4;
+async function displayWishlist(target: string, client: Client, interaction: CommandInteraction, index: number =0, targetWishlist: any, prismaUser: any, discordUser: any ){
+    index = Math.min(Math.max(0, index), Math.ceil(targetWishlist.length/MAX_WISHLIST) - 1);
 
     let embed = new EmbedBuilder()
         .setTitle("Wishlist")
-        .setAuthor({name: discordUser.username.capitalize(), iconURL: discordUser.avatarURL()! || undefined})
+        .setAuthor({name: discordUser.username.capitalize(), iconURL: discordUser.avatarUrl ?? undefined})
         .setColor(0x00ffff)
 
     let content = "";
-    for(let i = 0; i < Math.min(targetWishlist.length, 10); i++){ // add pagination
+    for(let i = Math.min(index*MAX_WISHLIST, Math.max(targetWishlist.length-MAX_WISHLIST, 0)); i < Math.min(targetWishlist.length, index*MAX_WISHLIST+MAX_WISHLIST); i++){
         const card = targetWishlist[i].card;
-        let cardI18n = card.cardI18n.find((cardI18n) => cardI18n.language === prismaUser!.language);
+        const owned = card.collections.find((collection: any) => collection.user.discordId === target);
+        if(owned){
+            // remove from wishlist
+            await prisma.wish.delete({
+                where: {
+                    cardId_userId_serverId: {
+                        cardId: card.cardId,
+                        userId: targetWishlist[i].userId,
+                        serverId: interaction.guildId!
+                    }
+                }
+            });
+        }
+        let cardI18n = card.cardI18n.find((cardI18n: any) => cardI18n.language === prismaUser!.language);
         if(cardI18n === undefined){
             cardI18n = card.cardI18n[0]; // probably english
         }
-        content += cardI18n.name + " ("+card.cardId+")\n"; // TODO the card may be owned by another user, display it
+        content += cardI18n.name + " ("+card.cardId+")";
+        const owner = card.collections.find((collection: any) => collection.serverId === interaction.guildId!);
+        if(owner){
+            const ownerUser = await client.users.fetch(owner.user.discordId);
+            content += ownerUser.tag;
+        }
+        content += "\n";
     }
     embed.setDescription(content);
-
-    await interaction.followUp({
-        ephemeral: true,
-        embeds: [embed]
+    const hasPrevious = index > 0;
+    const hasNext = index < Math.ceil(targetWishlist.length/MAX_WISHLIST) - 1;
+    let components = [];
+    if(hasPrevious){
+        const previous = new ButtonBuilder()
+            .setCustomId("previous")
+            .setLabel("Previous")
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("⬅️")
+        components.push(previous);
+    }
+    if(hasNext){
+        const next = new ButtonBuilder()
+            .setCustomId("next")
+            .setLabel("Next")
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("➡️")
+        components.push(next);
+    }
+    const msg = await interaction.editReply({
+        embeds: [embed],
+        components: components.length>0?[{
+            type: 1,
+            components: components
+        }] : []
     });
+
+    try{
+        if(components.length > 0){
+            const collectorFilter = (i: any) => i.user.id === interaction.user.id;
+            const confirmation = await msg.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+            await confirmation.deferUpdate();
+
+            if(confirmation.customId === "next"){
+                await displayWishlist(target, client, interaction, index+1, targetWishlist, prismaUser, discordUser);
+            }
+            else if(confirmation.customId === "previous"){
+                await displayWishlist(target, client, interaction, index-1, targetWishlist, prismaUser, discordUser);
+            }
+        }
+    }
+    catch(e){
+        await interaction.editReply({ components: [] });
+    }
 }
 
 export const Wishlist: Command = {
@@ -72,19 +113,50 @@ export const Wishlist: Command = {
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
         const data = interaction.options.data;
-        if(data.length !== 1){
-            await displayWishlist(interaction.user.id,client, interaction);
-            return;
-        }
-        console.assert(data[0].type === ApplicationCommandOptionType_USER, "data[0].type === USER");
-        const user = data[0].value as string;
-        await displayWishlist(user, client, interaction);
+        const discordId = data.find((option: any) => option.type === ApplicationCommandOptionType_USER)?.name ?? interaction.user.id;
+        const index = data.find((option: any) => option.type === ApplicationCommandOptionType_INTEGER)?.value as number | undefined;
+        const targetWishlistP = prisma.wish.findMany({
+            where: {
+                user: {
+                    discordId: discordId
+                },
+                serverId: interaction.guildId!
+            },
+            include: {
+                card: {
+                    include: {
+                        cardI18n: true,
+                        collections: {
+                            include: {
+                                user: true
+                            }
+                        }
+                    }
+                },
+                user: true
+            }
+        });
+        const prismaUserP = prisma.user.findUnique({
+            where: {
+                discordId: interaction.user.id
+            }
+        });
+        const discordUserP = discordUserRedis(discordId, client);
+        const [targetWishlist, prismaUser, discordUser] = await Promise.all([targetWishlistP, prismaUserP, discordUserP]);
+
+        await interaction.followUp({ content: "Loading...", ephemeral: true });
+        await displayWishlist(discordId, client, interaction, index ?? 0, targetWishlist, prismaUser, discordUser);
     },
     options: [
         {
             name: "user",
             description: "@ the user whose wishlist you want to see",
-            type: ApplicationCommandOptionType_USER,
+            type: 6,
         },
+        {
+            name: "page",
+            description: "The page of the wishlist",
+            type: 4,
+        }
     ],
 };

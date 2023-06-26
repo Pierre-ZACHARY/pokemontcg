@@ -1,33 +1,157 @@
-import { CommandInteraction, Client } from "discord.js";
+import {CommandInteraction, Client, EmbedBuilder, ButtonStyle, ButtonBuilder} from "discord.js";
 import { Command } from "../Command";
 import {ApplicationCommandOptionType_STRING} from "./Language";
 import {prisma} from "../../prisma";
 
+const MAX_EXTENSION_PER_PAGE = 20;
 
-async function listExtension() : Promise<string>{
+async function listExtension(index: number = 0, extensions: any, interaction: CommandInteraction){
     // find all extensions which have a least one card associated with them
-    const extensions = await prisma.extension.findMany({
-        where: {
-            cards: {
-                some: {}
+    index = Math.min(Math.max(0, index), Math.ceil(extensions.length/MAX_EXTENSION_PER_PAGE) - 1);
+
+    let result = "";
+    for(let i = Math.min(index*MAX_EXTENSION_PER_PAGE, Math.max(extensions.length-MAX_EXTENSION_PER_PAGE, 0)); i < Math.min(extensions.length, index*MAX_EXTENSION_PER_PAGE+MAX_EXTENSION_PER_PAGE); i++){
+        const numCards = extensions[i].cards.length;
+        result += extensions[i].name + " \t- **" + extensions[i].acronym + "**\t*"+numCards+" cards*\n";
+    }
+    const embed = new EmbedBuilder()
+        .setTitle("Extension")
+        .setDescription(result)
+        .setColor(0x00ffff)
+        .setFooter({text: "Page " + (index+1) + " of " + Math.ceil(extensions.length/MAX_EXTENSION_PER_PAGE)})
+    const hasPrevious = index > 0;
+    const hasNext = index < Math.ceil(extensions.length/MAX_EXTENSION_PER_PAGE) - 1;
+    let components = [];
+    if(hasPrevious){
+        const previous = new ButtonBuilder()
+            .setCustomId("previous")
+            .setLabel("Previous")
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("⬅️")
+        components.push(previous);
+    }
+    if(hasNext){
+        const next = new ButtonBuilder()
+            .setCustomId("next")
+            .setLabel("Next")
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("➡️")
+        components.push(next);
+    }
+    const msg = await interaction.editReply({
+        embeds: [embed],
+        content: "",
+        components: components.length > 0 ? [{
+            type: 1,
+            components: components
+        }] : []
+    });
+
+    try{
+        if(components.length > 0){
+            const collectorFilter = (i: any) => i.user.id === interaction.user.id;
+            const confirmation = await msg.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+            await confirmation.deferUpdate();
+
+            if(confirmation.customId === "next"){
+                await listExtension(index+1, extensions, interaction);
             }
-        },
-        select: {
-            name: true,
-            acronym: true,
-            cards: {
-                select: {
-                    id: true,
-                }
+            else if(confirmation.customId === "previous"){
+                await listExtension(index-1, extensions, interaction);
             }
         }
-    });
-    let result = "Invalid Extension, please select a valid extension acronym:\n**Name - Acronym**\n\n";
-    for(let i = 0; i < extensions.length; i++){
-        const numCards = extensions[i].cards.length;
-        result += extensions[i].name + " --> **" + extensions[i].acronym + "**\t*"+numCards+" cards*\n";
     }
-    return result; // TODO put this on redis
+    catch(e){
+        await interaction.editReply({ components: [] });
+    }
+}
+
+
+const MAX_CARDS_PER_PAGE = 20;
+async function listCards(index: number = 0, extensions: any, cardList: any, interaction: CommandInteraction, userLang: string = "en"){
+    index = Math.min(Math.max(0, index), Math.ceil(extensions.cards.length/MAX_CARDS_PER_PAGE) - 1);
+
+    const embed = new EmbedBuilder()
+        .setTitle(extensions.name + " - " + extensions.acronym)
+
+    let result = "";
+    for(let i = Math.min(index*MAX_CARDS_PER_PAGE, Math.max(extensions.cards.length-MAX_CARDS_PER_PAGE, 0)); i < Math.min(extensions.cards.length, index*MAX_CARDS_PER_PAGE+MAX_CARDS_PER_PAGE); i++){
+        let i18n = extensions.cards[i].cardI18n.find((i18n: any) => i18n.language === userLang) ?? extensions.cards[i].cardI18n[0];
+        result += "**"+i18n.name + "** \t(" + extensions.cards[i].cardId + ")\n";
+    }
+    embed.setDescription(result)
+        .setColor(0x00ffff)
+        .setFooter({text: "Page " + (index+1) + " of " + Math.ceil(extensions.cards.length/MAX_CARDS_PER_PAGE)})
+    const hasPrevious = index > 0;
+    const hasNext = index < Math.ceil(extensions.cards.length/MAX_CARDS_PER_PAGE) - 1;
+    let components = [];
+    const selectExtension = new ButtonBuilder()
+        .setCustomId("selectExtension")
+        .setLabel("Select extension")
+        .setStyle(ButtonStyle.Success)
+        .setEmoji("✅")
+    components.push(selectExtension);
+    if(hasPrevious){
+        const previous = new ButtonBuilder()
+            .setCustomId("previous")
+            .setLabel("Previous")
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("⬅️")
+        components.push(previous);
+    }
+    if(hasNext){
+        const next = new ButtonBuilder()
+            .setCustomId("next")
+            .setLabel("Next")
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("➡️")
+        components.push(next);
+    }
+    const msg = await interaction.editReply({
+        embeds: [embed],
+        content: "",
+        components: components.length > 0 ? [{
+            type: 1,
+            components: components
+        }] : []
+    });
+    try{
+        if(components.length > 0){
+            const collectorFilter = (i: any) => i.user.id === interaction.user.id;
+            const confirmation = await msg.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+            await confirmation.deferUpdate();
+
+            if(confirmation.customId === "next"){
+                await listCards(index+1, extensions,cardList, interaction, userLang);
+            }
+            else if(confirmation.customId === "previous"){
+                await listCards(index-1, extensions,cardList, interaction, userLang);
+            }
+            else if(confirmation.customId === "selectExtension"){
+                const prismaP = prisma.user.update({
+                    where: {
+                        discordId: interaction.user.id
+                    },
+                    data: {
+                        selectedExtension: {
+                            connect: {
+                                id: extensions.id
+                            }
+                        }
+                    },
+                });
+                const [prismaResult, msg] = await Promise.all([prismaP,
+                    interaction.followUp({
+                        ephemeral: true,
+                        content: "Extension selected!",
+                    })]);
+                await listCards(index, extensions,cardList, interaction, userLang);
+            }
+        }
+    }
+    catch(e){
+        await interaction.editReply({ components: [] });
+    }
 }
 export const Extension: Command = {
     name: "extension",
@@ -37,10 +161,27 @@ export const Extension: Command = {
         // TODO translate this
         const data = interaction.options.data;
         if(data.length !== 1){
-            await interaction.followUp({
-                ephemeral: true,
-                content: await listExtension() // TODO when we add /game, we can filter extensions by game
+            const extensionsP = prisma.extension.findMany({
+                where: {
+                    cards: {
+                        some: {}
+                    }
+                },
+                select: {
+                    name: true,
+                    acronym: true,
+                    cards: {
+                        select: {
+                            id: true,
+                        }
+                    }
+                }
             });
+            const [msg, extensions] = await Promise.all([interaction.followUp({
+                ephemeral: true,
+                content: "Loading...",
+            }), extensionsP]);
+            await listExtension(0, extensions, interaction);
             return;
         }
         console.assert(data[0].type === ApplicationCommandOptionType_STRING, "data[0].type === STRING")
@@ -48,34 +189,50 @@ export const Extension: Command = {
         let extension = await prisma.extension.findUnique({
             where: {
                 acronym: acronym,
-            }
-        });
-        if(extension === null){
-            await interaction.followUp({
-                ephemeral: true,
-                content: await listExtension()
-            });
-            return;
-        }
-        await prisma.user.update({
-            where: {
-                discordId: interaction.user.id,
             },
-            data: {
-                selectedExtension: {
-                    connect: {
-                        id: extension.id,
+            include: {
+                cards: {
+                    include: {
+                        cardI18n: true,
                     }
                 }
             }
         });
-
-        const content = "Successfully selected extension: " + extension.name + " - " + extension.acronym + "\n";
-
-        await interaction.followUp({
-            ephemeral: true,
-            content
+        if(extension === null){
+            const extensionsP = prisma.extension.findMany({
+                where: {
+                    cards: {
+                        some: {}
+                    }
+                },
+                select: {
+                    name: true,
+                    acronym: true,
+                    cards: {
+                        select: {
+                            id: true,
+                        }
+                    }
+                }
+            });
+            const [msg, extensions] = await Promise.all([interaction.followUp({
+                ephemeral: true,
+                content: "Loading...",
+            }), extensionsP]);
+            await listExtension(0, extensions, interaction);
+            return;
+        }
+        const prismaUserP = prisma.user.findUnique({
+            where: {
+                discordId: interaction.user.id,
+            },
         });
+        const [prismaUser, msg] = await Promise.all([prismaUserP, interaction.followUp({
+            ephemeral: true,
+            content: "Loading..."
+        })]);
+        const cardList = extension.cards.sort((a: any, b: any) => ((a.cardId as string) < (b.cardId as string)) ? -1 : 1);
+        await listCards(0, extension, cardList, interaction, prismaUser!.language);
     },
     options: [
         {

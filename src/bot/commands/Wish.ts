@@ -64,6 +64,7 @@ export const Wish: Command = {
             name: "cardid",
             description: "CardId correspond to extension acronym - card number (e.g. sv02-001)",
             type: ApplicationCommandOptionType_STRING,
+            required: true,
         },
     ],
 };

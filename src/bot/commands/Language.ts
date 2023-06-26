@@ -14,20 +14,19 @@ export const Language: Command = {
         console.assert(data[0].type === ApplicationCommandOptionType_STRING, "data[0].type === STRING")
         const lang = data[0].value as string;
         console.assert(lang === "fr" || lang === "en", "lang === fr || lang === en")
-        await prisma.user.update({
+
+        const content = lang === "en" ? "Bot language has been changed to English" : "La langue du bot a été changée en Français";
+        await Promise.all([interaction.followUp({
+            ephemeral: true,
+            content
+        }), prisma.user.update({
             where: {
                 discordId: interaction.user.id,
             },
             data: {
                 language: lang as string,
             }
-        })
-
-        const content = lang === "en" ? "Bot language has been changed to English" : "La langue du bot a été changée en Français";
-        await interaction.followUp({
-            ephemeral: true,
-            content
-        });
+        })]);
     },
     options: [
         {

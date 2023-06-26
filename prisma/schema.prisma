@@ -112,6 +112,7 @@ model Collection {
   serverId String
   card     Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
   cardId   Int
+  obtainedAt DateTime @default(now())
 
   @@unique([cardId, serverId]) // only one card per server
 }
@@ -177,12 +178,14 @@ model Shop {
 }
 
 model Wish {
+  id       Int    @id @default(autoincrement())
   card     Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
   cardId   Int
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId   Int
   server   Server @relation(fields: [serverId], references: [discordId])
   serverId String
+  wishedAt DateTime @default(now())
 
   @@unique([cardId, userId, serverId])
 }
