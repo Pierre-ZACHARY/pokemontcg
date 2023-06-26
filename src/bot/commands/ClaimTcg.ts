@@ -3,18 +3,7 @@ import { Command } from "../Command";
 import {prisma} from "../../prisma";
 import {getLang} from "../utils/getLang";
 
-declare global {
-    interface String {
-        fmt(...values: any[]): string;
-    }
-}
 
-String.prototype.fmt = function (...values: any[]): string {
-    return this.replace(/\{(\d+)\}/g, (match, index) => {
-        const value = values[index] !== undefined ? values[index] : '';
-        return String(value);
-    });
-};
 
 export const ClaimTcg: Command = {
     name: "claimtcg",

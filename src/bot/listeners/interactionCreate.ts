@@ -17,16 +17,16 @@ const handleSlashCommand = async (client: Client, interaction: CommandInteractio
         await interaction.followUp({content: "Can't answer here"});
         return; // we don't want to answer to non-guild message
     }
-    await userGuard(interaction.user);
-    await serverGuard(interaction.guild!);
-    //await updateShop(interaction.guild!);
     const slashCommand = Commands.find(c => c.name === interaction.commandName);
     if (!slashCommand) {
         await interaction.followUp({content: "An error has occurred"});
         return;
     }
-
     await interaction.deferReply();
+    await userGuard(interaction.user);
+    await serverGuard(interaction.guild!);
+    //await updateShop(interaction.guild!);
+
 
     slashCommand.run(client, interaction);
 };

@@ -43,18 +43,30 @@ async function fetchCard(customLink: string = "{0}/{1}"): Promise<"success" | "e
         // rarity
         const rarity = english("div.stats-footer span").last().text().split(" ")[1];
         const rarityColor = "#000000"; // default color
-        const prismaRarityPromise = prisma.rarity.upsert({
-            where: {
-                name: rarity,
-            },
-            update: {
+        let prismaRarityPromise;
+        try{
+            prismaRarityPromise = prisma.rarity.upsert({
+                where: {
+                    name: rarity,
+                },
+                update: {
 
-            },
-            create: {
-                name: rarity,
-                color: rarityColor,
-            }
-        });
+                },
+                create: {
+                    name: rarity,
+                    color: rarityColor,
+                }
+            });
+        }
+        catch(e: any){
+            console.log("error at {0} ({1})".fmt(customLink, e.message)); // this may happen if the rarity is created in parallel
+            prismaRarityPromise = prisma.rarity.findFirst({
+                where: {
+                    name: rarity,
+                }
+            });
+        }
+
         // extension name
         const extensionName = english("div.stats-footer h3").first().text();
         const prismaExtensionPromise = prisma.extension.findFirst({
@@ -83,7 +95,7 @@ async function fetchCard(customLink: string = "{0}/{1}"): Promise<"success" | "e
             create: {
                 cardId: cardId,
                 hp: hp,
-                rarityId: prismaRarity.id,
+                rarityId: prismaRarity!.id,
                 extensionId: prismaExtension.id,
             }
         });
@@ -96,7 +108,7 @@ async function fetchCard(customLink: string = "{0}/{1}"): Promise<"success" | "e
             where: {
                 cardId_language: {
                     language: "en",
-                    cardId: prismaCard.id,
+                    cardId: prismaCard.cardId,
                 }
             },
             update: {
@@ -105,7 +117,7 @@ async function fetchCard(customLink: string = "{0}/{1}"): Promise<"success" | "e
                 language: "en",
             },
             create: {
-                cardId: prismaCard.id,
+                cardId: prismaCard.cardId,
                 language: "en",
                 name: name,
                 imgUrl: imgSrc,
@@ -123,7 +135,7 @@ async function fetchCard(customLink: string = "{0}/{1}"): Promise<"success" | "e
                 where: {
                     cardId_language: {
                         language: "fr",
-                        cardId: prismaCard.id,
+                        cardId: prismaCard.cardId,
                     }
                 },
                 update: {
@@ -132,7 +144,7 @@ async function fetchCard(customLink: string = "{0}/{1}"): Promise<"success" | "e
                     language: "fr",
                 },
                 create: {
-                    cardId: prismaCard.id,
+                    cardId: prismaCard.cardId,
                     language: "fr",
                     name: nameFr,
                     imgUrl: imgSrcFr,
@@ -251,5 +263,5 @@ async function fetchAllCards(pageIndex: number = 1){
     return;
 }
 
-//main().then()
-fetchAllCards(528);
+fetchAllCards(0);
+
