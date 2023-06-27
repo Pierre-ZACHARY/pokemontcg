@@ -3,5 +3,4 @@ LABEL authors="Yukiix"
 COPY . .
 RUN npm install -g npm@9.7.2
 RUN yarn install
-RUN npx prisma generate
-RUN yarn bot
+ENTRYPOINT yarn bot
