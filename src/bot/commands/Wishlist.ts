@@ -3,6 +3,8 @@ import { Command } from "../Command";
 import {ApplicationCommandOptionType_USER} from "./Collection";
 import {prisma} from "../../prisma";
 import {discordUserRedis} from "../utils/redisWrapper";
+import {getLang} from "../utils/getLang";
+import {Language} from "../i18n/en";
 
 declare global {
     interface String {
@@ -24,7 +26,7 @@ String.prototype.capitalize = function (): string {
 
 const MAX_WISHLIST = 20;
 export const ApplicationCommandOptionType_INTEGER = 4;
-async function displayWishlist(target: string, client: Client, interaction: CommandInteraction, index: number =0, targetWishlist: any, prismaUser: any, discordUser: any ){
+async function displayWishlist(target: string, client: Client, interaction: CommandInteraction, index: number =0, targetWishlist: any, prismaUser: any, discordUser: any, lang: Language ){
     index = Math.min(Math.max(0, index), Math.ceil(targetWishlist.length/MAX_WISHLIST) - 1);
 
     let embed = new EmbedBuilder()
@@ -67,7 +69,7 @@ async function displayWishlist(target: string, client: Client, interaction: Comm
     if(hasPrevious){
         const previous = new ButtonBuilder()
             .setCustomId("previous")
-            .setLabel("Previous")
+            .setLabel(lang.previous)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("⬅️")
         components.push(previous);
@@ -75,7 +77,7 @@ async function displayWishlist(target: string, client: Client, interaction: Comm
     if(hasNext){
         const next = new ButtonBuilder()
             .setCustomId("next")
-            .setLabel("Next")
+            .setLabel(lang.next)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("➡️")
         components.push(next);
@@ -95,10 +97,10 @@ async function displayWishlist(target: string, client: Client, interaction: Comm
             await confirmation.deferUpdate();
 
             if(confirmation.customId === "next"){
-                await displayWishlist(target, client, interaction, index+1, targetWishlist, prismaUser, discordUser);
+                await displayWishlist(target, client, interaction, index+1, targetWishlist, prismaUser, discordUser, lang);
             }
             else if(confirmation.customId === "previous"){
-                await displayWishlist(target, client, interaction, index-1, targetWishlist, prismaUser, discordUser);
+                await displayWishlist(target, client, interaction, index-1, targetWishlist, prismaUser, discordUser,lang);
             }
         }
     }
@@ -110,6 +112,9 @@ async function displayWishlist(target: string, client: Client, interaction: Comm
 export const Wishlist: Command = {
     name: "wishlist",
     description: "Check the wishlist of a user",
+    descriptionLocalizations: {
+        fr: "Voir la wishlist d'un utilisateur"
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
         const data = interaction.options.data;
@@ -144,18 +149,25 @@ export const Wishlist: Command = {
         const discordUserP = discordUserRedis(discordId, client);
         const [targetWishlist, prismaUser, discordUser] = await Promise.all([targetWishlistP, prismaUserP, discordUserP]);
 
-        await interaction.followUp({ content: "Loading...", ephemeral: true });
-        await displayWishlist(discordId, client, interaction, index ?? 0, targetWishlist, prismaUser, discordUser);
+        const lang = getLang(prismaUser!.language);
+        await interaction.followUp({ content: lang.loading, ephemeral: true });
+        await displayWishlist(discordId, client, interaction, index ?? 0, targetWishlist, prismaUser, discordUser, lang);
     },
     options: [
         {
             name: "user",
             description: "@ the user whose wishlist you want to see",
+            descriptionLocalizations: {
+                fr: "@ l'utilisateur dont vous voulez voir la wishlist"
+            },
             type: 6,
         },
         {
             name: "page",
             description: "The page of the wishlist",
+            descriptionLocalizations: {
+                fr: "La page de la wishlist"
+            },
             type: 4,
         }
     ],

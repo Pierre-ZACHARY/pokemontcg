@@ -6,7 +6,10 @@ import {prisma} from "../../prisma";
 
 export const Give: Command = {
     name: "give",
-    description: "give a card to someone",
+    description: "Give a card to someone",
+    descriptionLocalizations: {
+        fr: "Donner une carte à quelqu'un"
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
         const data = interaction.options.data;
@@ -99,12 +102,18 @@ export const Give: Command = {
         {
             name: "cardid",
             description: "CardId to give",
+            descriptionLocalizations: {
+                fr: "Id de la carte à donner"
+            },
             type: ApplicationCommandOptionType_STRING,
             required: true,
         },
         {
             name: "user",
             description: "@ user to give the card",
+            descriptionLocalizations: {
+                fr: "@ de l'utilisateur à qui donner la carte"
+            },
             type: ApplicationCommandOptionType_USER,
             required: true,
         },

@@ -6,6 +6,9 @@ import {prisma} from "../../prisma";
 export const Stats: Command = {
     name: "stats",
     description: "Returns roll stats of a user",
+    descriptionLocalizations: {
+        fr: "Retourne les stats de roll d'un utilisateur"
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
         const data = interaction.options.data;
@@ -67,6 +70,9 @@ export const Stats: Command = {
         {
             name: "user",
             description: "@ the user stats you want to see",
+            descriptionLocalizations: {
+                fr: "@ l'utilisateur dont vous voulez voir les stats"
+            },
             type: ApplicationCommandOptionType_USER,
         },
     ],

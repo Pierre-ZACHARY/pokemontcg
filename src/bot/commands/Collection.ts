@@ -5,10 +5,11 @@ import {prisma} from "../../prisma";
 import {getLang} from "../utils/getLang";
 import {discordUserRedis} from "../utils/redisWrapper";
 import {ApplicationCommandOptionType_INTEGER} from "./Wishlist";
+import {Language} from "../i18n/en";
 export const ApplicationCommandOptionType_USER = 6;
 const MAX_COLLECTION = 20;
 
-async function displayCollection(discordId: string, client: Client, interaction: CommandInteraction, index: number = 0, userCollectionAll: any, prismaUser: any, discordUser: any){
+async function displayCollection(discordId: string, client: Client, interaction: CommandInteraction, index: number = 0, userCollectionAll: any, prismaUser: any, discordUser: any, lang: Language){
 
     console.assert(prismaUser !== null, "prismaUser !== null")
     index = Math.min(Math.max(0, index), Math.ceil(userCollectionAll.length/MAX_COLLECTION) - 1);
@@ -34,7 +35,7 @@ async function displayCollection(discordId: string, client: Client, interaction:
     if(hasPrevious){
         const previous = new ButtonBuilder()
             .setCustomId("previous")
-            .setLabel("Previous")
+            .setLabel(lang.previous)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("⬅️")
         components.push(previous);
@@ -42,7 +43,7 @@ async function displayCollection(discordId: string, client: Client, interaction:
     if(hasNext){
         const next = new ButtonBuilder()
             .setCustomId("next")
-            .setLabel("Next")
+            .setLabel(lang.next)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("➡️")
         components.push(next);
@@ -64,10 +65,10 @@ async function displayCollection(discordId: string, client: Client, interaction:
             await confirmation.deferUpdate();
 
             if(confirmation.customId === "next"){
-                await displayCollection(discordId, client, interaction, index+1, userCollectionAll, prismaUser, discordUser);
+                await displayCollection(discordId, client, interaction, index+1, userCollectionAll, prismaUser, discordUser, lang);
             }
             else if(confirmation.customId === "previous"){
-                await displayCollection(discordId, client, interaction, index-1, userCollectionAll, prismaUser, discordUser);
+                await displayCollection(discordId, client, interaction, index-1, userCollectionAll, prismaUser, discordUser, lang);
             }
         }
     }
@@ -79,7 +80,10 @@ async function displayCollection(discordId: string, client: Client, interaction:
 }
 export const Collection: Command = {
     name: "collection",
-    description: "Display your, or selected user's collection",
+    description: "Display a collection",
+    descriptionLocalizations: {
+        fr: "Affiche une collection"
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
         const data = interaction.options.data;
@@ -106,19 +110,26 @@ export const Collection: Command = {
         });
         const discordUserP =  discordUserRedis(discordId, client);
         const [userCollectionAll, prismaUser, discordUser] = await Promise.all([userCollectionP, prismaUserP, discordUserP]);
-        await interaction.followUp({content: "Loading collection...", ephemeral: true});
+        const lang = getLang(prismaUser?.language ?? "en");
+        await interaction.followUp({content: lang.loading, ephemeral: true});
         const index = data.find((option: any) => option.type === ApplicationCommandOptionType_INTEGER)?.value as number | undefined;
-        await displayCollection(discordId, client, interaction, index ?? 0, userCollectionAll, prismaUser, discordUser);
+        await displayCollection(discordId, client, interaction, index ?? 0, userCollectionAll, prismaUser, discordUser, lang);
     },
     options: [
         {
             name: "user",
             description: "@ the user whose collection you want to see",
+            descriptionLocalizations: {
+                fr: "@ l'utilisateur dont vous voulez voir la collection"
+            },
             type: ApplicationCommandOptionType_USER,
         },
         {
             name: "page",
             description: "The page of the collection",
+            descriptionLocalizations: {
+                fr: "La page de la collection"
+            },
             type: 4,
         }
     ],

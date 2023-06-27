@@ -2,17 +2,28 @@ import { CommandInteraction, Client } from "discord.js";
 import { Command } from "../Command";
 import {ApplicationCommandOptionType_STRING} from "./Language";
 import {prisma} from "../../prisma";
+import {getLang} from "../utils/getLang";
 
 export const Wish: Command = {
     name: "wish",
     description: "Wish for a card",
+    descriptionLocalizations: {
+        fr: "Ajouter une carte à sa wishlist"
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
+        const prismaUser = await prisma.user.findUnique({
+            where: {
+                discordId: interaction.user.id,
+            }
+        });
+        console.assert(prismaUser !== null, "prismaUser !== null")
+        const lang = getLang(prismaUser!.language);
         const data = interaction.options.data;
         if(data.length !== 1){
             await interaction.followUp({
                 ephemeral: true,
-                content: "Invalid cardId"
+                content: lang.cardNotFound
             });
             return;
         }
@@ -29,16 +40,10 @@ export const Wish: Command = {
         if(card === null){
             await interaction.followUp({
                 ephemeral: true,
-                content: "Card not found"
+                content: lang.cardNotFound
             });
             return;
         }
-        const prismaUser = await prisma.user.findUnique({
-            where: {
-                discordId: interaction.user.id,
-            }
-        });
-        console.assert(prismaUser !== null, "prismaUser !== null")
         try{
             const wish = await prisma.wish.create({
                 data: {
@@ -49,20 +54,23 @@ export const Wish: Command = {
             });
             await interaction.followUp({
                 ephemeral: true,
-                content: "Wish granted"
+                content: lang.wishGranted
             });
         }
         catch (e: any){
             await interaction.followUp({
                 ephemeral: true,
-                content: "You already wished for this card"
+                content: lang.alreadyWished
             });
         }
     },
     options: [
         {
             name: "cardid",
-            description: "CardId correspond to extension acronym - card number (e.g. sv02-001)",
+            description: "CardId correspond to extension acronym (e.g. sv02-001)",
+            descriptionLocalizations: {
+                fr: "L'identifiant de la carte correspond à l'acronyme de l'extension (e.g. sv02-001)"
+            },
             type: ApplicationCommandOptionType_STRING,
             required: true,
         },

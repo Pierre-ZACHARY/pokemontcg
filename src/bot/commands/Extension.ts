@@ -2,14 +2,16 @@ import {CommandInteraction, Client, EmbedBuilder, ButtonStyle, ButtonBuilder} fr
 import { Command } from "../Command";
 import {ApplicationCommandOptionType_STRING} from "./Language";
 import {prisma} from "../../prisma";
+import {Language} from "../i18n/en";
+import {getLang} from "../utils/getLang";
 
 const MAX_EXTENSION_PER_PAGE = 20;
 
-async function listExtension(index: number = 0, extensions: any, interaction: CommandInteraction){
+async function listExtension(index: number = 0, extensions: any, interaction: CommandInteraction, lang: Language){
     // find all extensions which have a least one card associated with them
     index = Math.min(Math.max(0, index), Math.ceil(extensions.length/MAX_EXTENSION_PER_PAGE) - 1);
 
-    let result = "";
+    let result = lang.extensionUsage;
     for(let i = Math.min(index*MAX_EXTENSION_PER_PAGE, Math.max(extensions.length-MAX_EXTENSION_PER_PAGE, 0)); i < Math.min(extensions.length, index*MAX_EXTENSION_PER_PAGE+MAX_EXTENSION_PER_PAGE); i++){
         const numCards = extensions[i].cards.length;
         result += extensions[i].name + " \t- **" + extensions[i].acronym + "**\t*"+numCards+" cards*\n";
@@ -25,7 +27,7 @@ async function listExtension(index: number = 0, extensions: any, interaction: Co
     if(hasPrevious){
         const previous = new ButtonBuilder()
             .setCustomId("previous")
-            .setLabel("Previous")
+            .setLabel(lang.previous)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("⬅️")
         components.push(previous);
@@ -33,7 +35,7 @@ async function listExtension(index: number = 0, extensions: any, interaction: Co
     if(hasNext){
         const next = new ButtonBuilder()
             .setCustomId("next")
-            .setLabel("Next")
+            .setLabel(lang.next)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("➡️")
         components.push(next);
@@ -54,10 +56,10 @@ async function listExtension(index: number = 0, extensions: any, interaction: Co
             await confirmation.deferUpdate();
 
             if(confirmation.customId === "next"){
-                await listExtension(index+1, extensions, interaction);
+                await listExtension(index+1, extensions, interaction, lang);
             }
             else if(confirmation.customId === "previous"){
-                await listExtension(index-1, extensions, interaction);
+                await listExtension(index-1, extensions, interaction, lang);
             }
         }
     }
@@ -68,7 +70,7 @@ async function listExtension(index: number = 0, extensions: any, interaction: Co
 
 
 const MAX_CARDS_PER_PAGE = 20;
-async function listCards(index: number = 0, extensions: any, cardList: any, interaction: CommandInteraction, userLang: string = "en"){
+async function listCards(index: number = 0, extensions: any, cardList: any, interaction: CommandInteraction, userLang: string = "en", lang: Language){
     index = Math.min(Math.max(0, index), Math.ceil(extensions.cards.length/MAX_CARDS_PER_PAGE) - 1);
 
     const embed = new EmbedBuilder()
@@ -94,7 +96,7 @@ async function listCards(index: number = 0, extensions: any, cardList: any, inte
     if(hasPrevious){
         const previous = new ButtonBuilder()
             .setCustomId("previous")
-            .setLabel("Previous")
+            .setLabel(lang.previous)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("⬅️")
         components.push(previous);
@@ -102,7 +104,7 @@ async function listCards(index: number = 0, extensions: any, cardList: any, inte
     if(hasNext){
         const next = new ButtonBuilder()
             .setCustomId("next")
-            .setLabel("Next")
+            .setLabel(lang.next)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji("➡️")
         components.push(next);
@@ -122,10 +124,10 @@ async function listCards(index: number = 0, extensions: any, cardList: any, inte
             await confirmation.deferUpdate();
 
             if(confirmation.customId === "next"){
-                await listCards(index+1, extensions,cardList, interaction, userLang);
+                await listCards(index+1, extensions,cardList, interaction, userLang, lang);
             }
             else if(confirmation.customId === "previous"){
-                await listCards(index-1, extensions,cardList, interaction, userLang);
+                await listCards(index-1, extensions,cardList, interaction, userLang, lang);
             }
             else if(confirmation.customId === "selectExtension"){
                 const prismaP = prisma.user.update({
@@ -143,9 +145,9 @@ async function listCards(index: number = 0, extensions: any, cardList: any, inte
                 const [prismaResult, msg] = await Promise.all([prismaP,
                     interaction.followUp({
                         ephemeral: true,
-                        content: "Extension selected!",
+                        content: lang.extensionSelected,
                     })]);
-                await listCards(index, extensions,cardList, interaction, userLang);
+                await listCards(index, extensions,cardList, interaction, userLang, lang);
             }
         }
     }
@@ -156,10 +158,18 @@ async function listCards(index: number = 0, extensions: any, cardList: any, inte
 export const Extension: Command = {
     name: "extension",
     description: "Select the extension in which you are interested",
+    descriptionLocalizations: {
+        fr: "Sélectionnez l'extension qui vous intéresse"
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
-        // TODO translate this
         const data = interaction.options.data;
+        const prismaUser = await prisma.user.findUnique({
+            where: {
+                discordId: interaction.user.id
+            }
+        });
+        const lang = getLang(prismaUser!.language);
         if(data.length !== 1){
             const extensionsP = prisma.extension.findMany({
                 where: {
@@ -179,9 +189,9 @@ export const Extension: Command = {
             });
             const [msg, extensions] = await Promise.all([interaction.followUp({
                 ephemeral: true,
-                content: "Loading...",
+                content: lang.loading,
             }), extensionsP]);
-            await listExtension(0, extensions, interaction);
+            await listExtension(0, extensions, interaction, lang);
             return;
         }
         console.assert(data[0].type === ApplicationCommandOptionType_STRING, "data[0].type === STRING")
@@ -217,27 +227,25 @@ export const Extension: Command = {
             });
             const [msg, extensions] = await Promise.all([interaction.followUp({
                 ephemeral: true,
-                content: "Loading...",
+                content: lang.loading,
             }), extensionsP]);
-            await listExtension(0, extensions, interaction);
+            await listExtension(0, extensions, interaction, lang);
             return;
         }
-        const prismaUserP = prisma.user.findUnique({
-            where: {
-                discordId: interaction.user.id,
-            },
-        });
-        const [prismaUser, msg] = await Promise.all([prismaUserP, interaction.followUp({
+        const [msg] = await Promise.all([interaction.followUp({
             ephemeral: true,
-            content: "Loading..."
+            content: lang.loading
         })]);
         const cardList = extension.cards.sort((a: any, b: any) => ((a.cardId as string) < (b.cardId as string)) ? -1 : 1);
-        await listCards(0, extension, cardList, interaction, prismaUser!.language);
+        await listCards(0, extension, cardList, interaction, prismaUser!.language, lang);
     },
     options: [
         {
             name: "acronym",
             description: "The extension acronym you want to select",
+            descriptionLocalizations: {
+                fr: "L'acronyme de l'extension que vous voulez sélectionner"
+            },
             type: ApplicationCommandOptionType_STRING,
         },
     ],

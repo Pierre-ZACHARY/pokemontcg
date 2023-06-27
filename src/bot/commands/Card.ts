@@ -2,13 +2,16 @@ import {CommandInteraction, Client, EmbedBuilder} from "discord.js";
 import { Command } from "../Command";
 import {ApplicationCommandOptionType_STRING} from "./Language";
 import {prisma} from "../../prisma";
+import {getLang} from "../utils/getLang";
 
 export const Card: Command = {
     name: "card",
     description: "Display a card by its id",
+    descriptionLocalizations: {
+        fr: "Affiche une carte par son id"
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
-        const content = "Hello there!";
         const data = interaction.options.data;
         if(data.length !== 1){
             await interaction.followUp({
@@ -46,6 +49,7 @@ export const Card: Command = {
                 discordId: interaction.user.id,
             }
         });
+        const lang = getLang(prismaUser!.language);
         let i18n = card.cardI18n.find((i18n) => i18n.language === prismaUser!.language);
         if(i18n === undefined){
             i18n = card.cardI18n[0]; // english
@@ -54,7 +58,7 @@ export const Card: Command = {
 
         const embed = new EmbedBuilder()
             .setTitle(i18n.name)
-            .setURL("https://www.pokemon.com/us/pokemon-tcg/pokemon-cards/series/"+card.cardId.replace("-", "/"))
+            .setURL("https://limitlesstcg.com/cards/en/"+card.cardId.replace("-", "/"))
             .setImage(i18n.imgUrl)
             .setDescription(card.rarity.name)
             .setColor(parseInt(card.rarity.color.slice(1), 16))
@@ -77,7 +81,10 @@ export const Card: Command = {
     options: [
         {
             name: "cardid",
-            description: "CardId correspond to extension acronym - card number (e.g. sv02-001)",
+            description: "CardId correspond to extension acronym (e.g. sv02-001)",
+            descriptionLocalizations: {
+                fr: "L'identifiant de la carte correspond à l'acronyme de l'extension (e.g. sv02-001)"
+            },
             type: ApplicationCommandOptionType_STRING,
         },
     ],

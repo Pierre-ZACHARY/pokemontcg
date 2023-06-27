@@ -10,8 +10,14 @@ import {
 import {Command} from "../Command";
 import {prisma} from "../../prisma";
 import {discordUserRedis, redisWrapper} from "../utils/redisWrapper";
+import {getLang} from "../utils/getLang";
+import {Language} from "../i18n/en";
 
-async function listenButton(msg: any, interaction: CommandInteraction, client: Client, rolledcard: any,  prismaUser: any, i18n: any){
+
+const CLAIM_MINUTES = 30;
+const ROLL_MINUTES = 30;
+const MAX_ROLLS = 20;
+async function listenButton(msg: any, interaction: CommandInteraction, client: Client, rolledcard: any,  prismaUser: any, i18n: any, lang: Language){
     const collectorFilter = (i: any) => i.user.id === interaction.user.id;
     try {
         const confirmation = await msg.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
@@ -24,9 +30,9 @@ async function listenButton(msg: any, interaction: CommandInteraction, client: C
             await interaction.editReply({ content: '', components: [] });
             return;
         }
-        if(usr.lastClaim && new Date(usr.lastClaim).getTime() > Date.now() - 2 * 3600 * 1000){
-            await interaction.followUp({ content: "Can't claim right now, next claim in : "+Math.ceil((new Date(usr.lastClaim).getTime()-(Date.now() - 2 * 3600 * 1000))/(1000*60))+" minutes", components: [] });
-            await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n);
+        if(usr.lastClaim && new Date(usr.lastClaim).getTime() > Date.now() - CLAIM_MINUTES * 60 * 1000){
+            await interaction.followUp({ content: lang.nextClaim.fmt(Math.ceil((new Date(usr.lastClaim).getTime()-(Date.now() - CLAIM_MINUTES * 60 * 1000))/(1000*60))), components: [] });
+            await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang);
             return;
         }
         if(confirmation.customId === "addCollection"){
@@ -53,12 +59,9 @@ async function listenButton(msg: any, interaction: CommandInteraction, client: C
                         }
                     }
                 }), interaction.editReply({
-                content: "",
+                content: lang.successClaim.fmt(i18n!.name, rolledcard.cardId),
                 components: [],
             })]);
-            await interaction.followUp({
-                content: "**"+i18n!.name+"** ("+rolledcard.cardId+") added to your collection ! 🎉",
-            });
         }
     } catch (e) {
         await interaction.editReply({ content: '', components: [] });
@@ -154,6 +157,9 @@ async function rollCard(extension: string){
 export const Roll: Command = {
     name: "roll",
     description: "Roll a card",
+    descriptionLocalizations: {
+        fr: "Tire une carte",
+    },
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
         const prismaUser = (await prisma.user.findUnique({
@@ -165,15 +171,16 @@ export const Roll: Command = {
                 rolls: true,
             }
         }))!;
+        const lang = getLang(prismaUser.language);
         let last4hPromises = prismaUser.rolls.filter((roll) => {
-            return new Date(roll.datetime).getTime() > Date.now() - 2 * 3600 * 1000;
+            return new Date(roll.datetime).getTime() > Date.now() - ROLL_MINUTES * 60 * 1000;
         });
-        if(last4hPromises.length >= 20){
+        if(last4hPromises.length >= MAX_ROLLS){
             let last4hPromisesOrdered = last4hPromises.sort((a, b) => {
                 return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
             });
             await interaction.followUp({
-                content: "20 rolls / 2h, Next roll in " + Math.ceil((new Date(last4hPromisesOrdered[0].datetime).getTime() + 2 * 3600 * 1000 - Date.now()) / 1000 / 60) + " minutes",
+                content: lang.nextRoll.fmt(Math.ceil((new Date(last4hPromisesOrdered[0].datetime).getTime() + ROLL_MINUTES * 60 * 1000 - Date.now()) / 1000 / 60)),
                 ephemeral: true,
             });
             return;
@@ -258,7 +265,7 @@ export const Roll: Command = {
         else{
             const button = new ButtonBuilder()
                 .setCustomId("addCollection")
-                .setLabel("Add to collection")
+                .setLabel(lang.addToCollection)
                 .setStyle(ButtonStyle.Primary)
                 .setEmoji("📥");
             msg = await interaction.editReply({
@@ -274,7 +281,7 @@ export const Roll: Command = {
 
         let content = "";
         for(let i = 0; i < wishes.length; i++){
-            content += `wished by <@${wishes[i].user.discordId}> \n`;
+            content += lang.wishedBy.fmt(wishes[i].user.discordId);
         }
 
         if(content!=""){
@@ -285,6 +292,6 @@ export const Roll: Command = {
             });
         }
 
-        await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n);
+        await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang);
     }
 };
