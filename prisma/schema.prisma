@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = env("PRISMA_CLIENT")
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -105,13 +105,13 @@ model Server {
 }
 
 model Collection {
-  id       Int    @id @default(autoincrement())
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId   Int
-  server   Server @relation(fields: [serverId], references: [discordId])
-  serverId String
-  card     Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  cardId   Int
+  id         Int      @id @default(autoincrement())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  server     Server   @relation(fields: [serverId], references: [discordId])
+  serverId   String
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardId     Int
   obtainedAt DateTime @default(now())
 
   @@unique([cardId, serverId]) // only one card per server
@@ -178,12 +178,12 @@ model Shop {
 }
 
 model Wish {
-  id       Int    @id @default(autoincrement())
-  card     Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  id       Int      @id @default(autoincrement())
+  card     Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
   cardId   Int
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId   Int
-  server   Server @relation(fields: [serverId], references: [discordId])
+  server   Server   @relation(fields: [serverId], references: [discordId])
   serverId String
   wishedAt DateTime @default(now())
 
