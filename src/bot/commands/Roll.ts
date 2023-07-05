@@ -37,24 +37,11 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
     try {
         const button = new ButtonBuilder()
             .setCustomId("addCollection")
-            .setLabel(lang.addToCollection)
+            .setLabel(lang.addToCollection + "\n (" + (anyoneCanClaim ? lang.anyoneCanClaim : interaction.user.username)+")")
             .setStyle(anyoneCanClaim ? ButtonStyle.Success : ButtonStyle.Primary)
             .setEmoji("📥");
 
-        let embed = msg.embeds;
-        let embeds = [];
-        let newEmbed;
-        if(embed.length === 1){
-            newEmbed = new EmbedBuilder()
-                .setTitle(embed[0].title)
-                .setDescription(embed[0].description)
-                .setURL(embed[0].url)
-                .setImage(embed[0].image?.url ?? "")
-                .setColor(embed[0].color)
-                .setFooter({iconURL: embed[0].footer?.iconURL, text: defaultFooter +"\n" + (anyoneCanClaim ? lang.anyoneCanClaim : lang.ownerCanClaim.fmt(interaction.user.username))})
-            embeds.push(newEmbed);
-        }
-        const msgEdited = await interaction.editReply({ content:msg.content, embeds: embeds, components: [{
+        const msgEdited = await interaction.editReply({ components: [{
                 type: 1,
                 components: [button],
             },] });

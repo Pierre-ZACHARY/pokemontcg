@@ -124,7 +124,7 @@ export const Collection: Command = {
     type: 1, // Chat input
     run: async (client: Client, interaction: CommandInteraction) => {
         const data = interaction.options.data;
-        const discordId = data.find((option: any) => option.type === ApplicationCommandOptionType_USER)?.name ?? interaction.user.id;
+        const discordId = data.find((option: any) => option.type === ApplicationCommandOptionType_USER)?.value as string ?? interaction.user.id;
         const userCollectionP = prisma.collection.findMany({
             where: {
                 user: {

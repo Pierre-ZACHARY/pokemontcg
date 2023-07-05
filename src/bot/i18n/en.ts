@@ -22,7 +22,7 @@ export class Language{
         public sortByExtension: string = "Sort by : extension",
         public sortByOptainedAt: string = "Sort by : obtained date",
         public ownerCanClaim: string = "Only {0} can claim this card.",
-        public anyoneCanClaim: string = "Anyone can claim this card.",
+        public anyoneCanClaim: string = "Everyone",
         public helpMessage: string = "Usage:" +
         "\n**/language <language>**: Set the bot language." +
         "\n**/roll**: Roll a card, max : " + MAX_ROLLS + " rolls every " + ROLL_MINUTES + " minutes. You can add a card to your collection every " + CLAIM_MINUTES + " minutes." +
