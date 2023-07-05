@@ -9,11 +9,17 @@ import {Language} from "../i18n/en";
 export const ApplicationCommandOptionType_USER = 6;
 const MAX_COLLECTION = 20;
 
-async function displayCollection(discordId: string, client: Client, interaction: CommandInteraction, index: number = 0, userCollectionAll: any, prismaUser: any, discordUser: any, lang: Language){
+async function displayCollection(discordId: string, client: Client, interaction: CommandInteraction, index: number = 0, userCollectionAll: any, prismaUser: any, discordUser: any, lang: Language, currentSort: string = "obtainedAt"){
 
     console.assert(prismaUser !== null, "prismaUser !== null")
     index = Math.min(Math.max(0, index), Math.ceil(userCollectionAll.length/MAX_COLLECTION) - 1);
-    let userCollection = userCollectionAll.slice(Math.min(index*MAX_COLLECTION,Math.max(0, userCollectionAll.length-index*MAX_COLLECTION)), Math.min(userCollectionAll.length,index*MAX_COLLECTION + MAX_COLLECTION));
+    let sortedCollection = userCollectionAll;
+    if(currentSort == "extension"){
+        sortedCollection = userCollectionAll.sort((a: any, b: any) => {
+            return a.card.extension.name < b.card.extension.name ? -1 : 1;
+        });
+    }
+    let userCollection = sortedCollection.slice(Math.min(index*MAX_COLLECTION,Math.max(0, sortedCollection.length-index*MAX_COLLECTION)), Math.min(sortedCollection.length,index*MAX_COLLECTION + MAX_COLLECTION));
     let content = "";
     for(let i = 0; i < userCollection.length; i++){
         const card = userCollection[i].card;
@@ -49,6 +55,26 @@ async function displayCollection(discordId: string, client: Client, interaction:
         components.push(next);
     }
 
+    switch (currentSort) {
+        case "obtainedAt":
+            const sortByObtenedAt = new ButtonBuilder()
+                .setCustomId("sortBy-obtainedAt")
+                .setLabel(lang.sortByOptainedAt)
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji("📎")
+            components.push(sortByObtenedAt);
+            break;
+        case "extension":
+            const sortByExtension = new ButtonBuilder()
+                .setCustomId("sortBy-extension")
+                .setLabel(lang.sortByExtension)
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji("📎")
+            components.push(sortByExtension);
+            break;
+    }
+
+
     const msg = await interaction.editReply({
         embeds: [embed],
         content: "",
@@ -64,11 +90,17 @@ async function displayCollection(discordId: string, client: Client, interaction:
             const confirmation = await msg.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
             await confirmation.deferUpdate();
 
-            if(confirmation.customId === "next"){
-                await displayCollection(discordId, client, interaction, index+1, userCollectionAll, prismaUser, discordUser, lang);
+            if(confirmation.customId == "next"){
+                await displayCollection(discordId, client, interaction, index+1, userCollectionAll, prismaUser, discordUser, lang, currentSort);
             }
-            else if(confirmation.customId === "previous"){
-                await displayCollection(discordId, client, interaction, index-1, userCollectionAll, prismaUser, discordUser, lang);
+            else if(confirmation.customId == "previous"){
+                await displayCollection(discordId, client, interaction, index-1, userCollectionAll, prismaUser, discordUser, lang, currentSort);
+            }
+            else if(confirmation.customId == "sortBy-extension"){
+                await displayCollection(discordId, client, interaction, index-1, userCollectionAll, prismaUser, discordUser, lang, "obtainedAt");
+            }
+            else if(confirmation.customId == "sortBy-obtainedAt"){
+                await displayCollection(discordId, client, interaction, index-1, userCollectionAll, prismaUser, discordUser, lang, "extension");
             }
         }
     }
@@ -97,10 +129,14 @@ export const Collection: Command = {
             include: {
                 card: {
                     include: {
-                        cardI18n: true
+                        cardI18n: true,
+                        extension: true
                     }
                 }
             },
+            orderBy: {
+                obtainedAt: "desc"
+            }
         });
 
         const prismaUserP = prisma.user.findUnique({

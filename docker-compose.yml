@@ -1,0 +1,32 @@
+# docker compose for local testing
+# make sure to set your discord token before running it
+volumes:
+  data:
+
+services:
+  redis:
+    image: redis:latest
+    volumes:
+      - data:/data
+    ports:
+      - 6379:6379
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - REDISPORT=6379
+      - REDISHOST=redis
+      - REDISPASS=
+      - REDISUSER=
+      - DATABASE_URL=${DATABASE_URL}
+      - PGDATABASE=${PGDATABASE}
+      - PGHOST=${PGHOST}
+      - PGPASSWORD=${PGPASSWORD}
+      - PGPORT=${PGPORT}
+      - PGUSER=${PGUSER}
+      - PRISMA_CLIENT=${PRISMA_CLIENT}
+      - DISCORD_TOKEN=${DISCORD_TOKEN}

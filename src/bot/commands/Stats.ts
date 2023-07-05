@@ -55,6 +55,7 @@ export const Stats: Command = {
             content += `${key}: ${value}\n`;
         }
 
+
         const embed = new EmbedBuilder()
             .setAuthor({name: result[0]!.username, iconURL: result[0]!.avatarURL()!})
             .setTitle("Stats")

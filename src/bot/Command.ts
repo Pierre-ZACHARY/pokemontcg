@@ -7,9 +7,11 @@ import {Wish} from "./commands/Wish";
 import {Roll} from "./commands/Roll";
 import {Give} from "./commands/Give";
 import {Card} from "./commands/Card";
+import {Help} from "./commands/Help";
+import {Stats} from "./commands/Stats";
 
 export interface Command extends ChatInputApplicationCommandData {
     run: (client: Client, interaction: CommandInteraction) => void;
 }
 
-export const Commands: Command[] = [Language, Extension, Collection, Wishlist, Wish, Roll, Give, Card];
+export const Commands: Command[] = [Language, Extension, Collection, Wishlist, Wish, Roll, Give, Card, Help, Stats];

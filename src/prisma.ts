@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 import {Prisma, PrismaClient} from '@prisma/client'
 import { createPrismaRedisCache } from "prisma-redis-middleware";
 import Redis from "ioredis";

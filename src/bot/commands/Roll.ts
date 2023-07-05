@@ -1,11 +1,11 @@
 import {
     ActionRowBuilder,
     ButtonBuilder, ButtonInteraction,
-    ButtonStyle,
-    Client,
+    ButtonStyle, CacheType,
+    Client, Collection, CollectorFilter,
     Colors,
     CommandInteraction,
-    EmbedBuilder
+    EmbedBuilder, Message
 } from "discord.js";
 import {Command} from "../Command";
 import {prisma} from "../../prisma";
@@ -14,25 +14,65 @@ import {getLang} from "../utils/getLang";
 import {Language} from "../i18n/en";
 
 
-const CLAIM_MINUTES = 30;
-const ROLL_MINUTES = 30;
-const MAX_ROLLS = 20;
-async function listenButton(msg: any, interaction: CommandInteraction, client: Client, rolledcard: any,  prismaUser: any, i18n: any, lang: Language){
-    const collectorFilter = (i: any) => i.user.id === interaction.user.id;
+export const CLAIM_MINUTES = 10;
+export const ROLL_MINUTES = 30;
+export const MAX_ROLLS = 30;
+export const PUBLIC_CLAIM_SECONDS = 5;
+async function listenButton(msg: Message<boolean>, interaction: CommandInteraction, client: Client, rolledcard: any,  prismaUser: any, i18n: any, lang: Language, rollstartTime: Date, defaultFooter: string = ""){
+
+    const timeUntilAnyoneCanClaimInSeconds = Math.max(0, rollstartTime.getSeconds() + PUBLIC_CLAIM_SECONDS - new Date().getSeconds()-1);
+    const waitTime = timeUntilAnyoneCanClaimInSeconds>0 ? timeUntilAnyoneCanClaimInSeconds*1000 : rollstartTime.getMilliseconds()+60*1000;
+    if(waitTime<= 0){
+        await interaction.editReply({ content: '', components: [] });
+        return;
+    }
+    const anyoneCanClaim = timeUntilAnyoneCanClaimInSeconds <= 0;
+    const collectorFilter = (i: any) =>
+    {
+        if(anyoneCanClaim){
+            return i.user.id === interaction.user.id;
+        }
+        return true; // anyone can claim after 15 seconds
+    };
     try {
-        const confirmation = await msg.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
-        const usr = await prisma.user.findUnique({
+        const button = new ButtonBuilder()
+            .setCustomId("addCollection")
+            .setLabel(lang.addToCollection)
+            .setStyle(anyoneCanClaim ? ButtonStyle.Success : ButtonStyle.Primary)
+            .setEmoji("📥");
+
+        let embed = msg.embeds;
+        let embeds = [];
+        let newEmbed;
+        if(embed.length === 1){
+            newEmbed = new EmbedBuilder()
+                .setTitle(embed[0].title)
+                .setDescription(embed[0].description)
+                .setURL(embed[0].url)
+                .setImage(embed[0].image?.url ?? "")
+                .setColor(embed[0].color)
+                .setFooter({iconURL: embed[0].footer?.iconURL, text: defaultFooter +"\n" + (anyoneCanClaim ? lang.anyoneCanClaim : lang.ownerCanClaim.fmt(interaction.user.username))})
+            embeds.push(newEmbed);
+        }
+        const msgEdited = await interaction.editReply({ content:msg.content, embeds: embeds, components: [{
+                type: 1,
+                components: [button],
+            },] });
+
+        const confirmation = await msgEdited.awaitMessageComponent({ filter: collectorFilter, time: waitTime });
+
+        const [usr, defer] = await Promise.all([prisma.user.findUnique({
             where: {
                 discordId: confirmation.user.id,
             }
-        });
+        }), confirmation.deferUpdate()]);
         if(!usr){
             await interaction.editReply({ content: '', components: [] });
             return;
         }
         if(usr.lastClaim && new Date(usr.lastClaim).getTime() > Date.now() - CLAIM_MINUTES * 60 * 1000){
             await interaction.followUp({ content: lang.nextClaim.fmt(Math.ceil((new Date(usr.lastClaim).getTime()-(Date.now() - CLAIM_MINUTES * 60 * 1000))/(1000*60))), components: [] });
-            await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang);
+            await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, rollstartTime, defaultFooter);
             return;
         }
         if(confirmation.customId === "addCollection"){
@@ -42,7 +82,11 @@ async function listenButton(msg: any, interaction: CommandInteraction, client: C
                     serverId: interaction.guildId!,
                     userId: prismaUser.id,
                 }
-            }), prisma.user.update({
+            }),
+                interaction.followUp({
+                    content: lang.successClaim.fmt(i18n!.name, rolledcard.cardId),
+                    components: [],
+                }),prisma.user.update({
                 where: {
                     id: prismaUser.id,
                 },
@@ -58,13 +102,24 @@ async function listenButton(msg: any, interaction: CommandInteraction, client: C
                             serverId: interaction.guildId!,
                         }
                     }
-                }), interaction.editReply({
-                content: lang.successClaim.fmt(i18n!.name, rolledcard.cardId),
-                components: [],
-            })]);
+                })]);
+            await interaction.editReply({ content: '', components: [] });
+            return;
+        }
+        else{
+            await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, rollstartTime, defaultFooter); // listen again
         }
     } catch (e) {
-        await interaction.editReply({ content: '', components: [] });
+        const timeUntilAnyoneCanClaimInSeconds = Math.max(0, rollstartTime.getSeconds() + PUBLIC_CLAIM_SECONDS - new Date().getSeconds());
+        const waitTime = Math.max(rollstartTime.getMilliseconds()+60*1000, timeUntilAnyoneCanClaimInSeconds*1000);
+
+        if(waitTime>0){
+            // happens when no claim in 15 seconds
+            await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, rollstartTime, defaultFooter);
+        }
+        else{
+            await interaction.editReply({ content: '', components: [] });
+        }
     }
 }
 async function rollCard(extension: string){
@@ -180,7 +235,7 @@ export const Roll: Command = {
                 return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
             });
             await interaction.followUp({
-                content: lang.nextRoll.fmt(Math.ceil((new Date(last4hPromisesOrdered[0].datetime).getTime() + ROLL_MINUTES * 60 * 1000 - Date.now()) / 1000 / 60)),
+                content: lang.nextRoll.fmt(MAX_ROLLS, ROLL_MINUTES, Math.ceil((new Date(last4hPromisesOrdered[0].datetime).getTime() + ROLL_MINUTES * 60 * 1000 - Date.now()) / 1000 / 60)),
                 ephemeral: true,
             });
             return;
@@ -214,7 +269,7 @@ export const Roll: Command = {
 
         const embed = new EmbedBuilder()
             .setTitle(i18n.name)
-            .setURL("https://www.pokemon.com/us/pokemon-tcg/pokemon-cards/series/"+rolledcard.cardId.replace("-", "/"))
+            .setURL("https://limitlesstcg.com/cards/en/"+rolledcard.cardId.replace("-", "/"))
             .setImage(i18n.imgUrl)
             .setDescription(rolledcard.rarity.name)
             .setColor(parseInt(rolledcard.rarity.color.slice(1), 16))
@@ -258,40 +313,23 @@ export const Roll: Command = {
                 name: ownerDiscordUser.username,
                 iconURL: ownerDiscordUser.avatarUrl,
             })
-            await interaction.editReply({
+            await msg.edit({
+                content: lang.ownedBy.fmt(ownerDiscordUser.username),
                 embeds: [embed],
             });
         }
         else{
-            const button = new ButtonBuilder()
-                .setCustomId("addCollection")
-                .setLabel(lang.addToCollection)
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji("📥");
-            msg = await interaction.editReply({
-                embeds: [embed],
-                components: [
-                    {
-                        type: 1,
-                        components: [button],
-                    },
-                ],
-            });
+            listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, new Date(), extension.name+ " - " + rolledcard.cardId).then();
         }
 
         let content = "";
+        const allUsers = await client.guilds.cache.get(interaction.guildId!)!.members.fetch();
         for(let i = 0; i < wishes.length; i++){
-            content += lang.wishedBy.fmt(wishes[i].user.discordId);
+            content += lang.wishedBy.fmt(allUsers.get(wishes[0].user.discordId)?.toString());
         }
 
         if(content!=""){
-            msg = await interaction.editReply({
-                content: content,
-                embeds: msg.embeds,
-                components: msg.components,
-            });
+            await msg.reply({content: content});
         }
-
-        await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang);
     }
 };
