@@ -19,6 +19,11 @@ async function displayCollection(discordId: string, client: Client, interaction:
             return a.card.extension.name < b.card.extension.name ? -1 : 1;
         });
     }
+    else{
+        sortedCollection = userCollectionAll.sort((a: any, b: any) => {
+            return a.obtainedAt < b.obtainedAt ? -1 : 1;
+        });
+    }
     let userCollection = sortedCollection.slice(Math.min(index*MAX_COLLECTION,Math.max(0, sortedCollection.length-index*MAX_COLLECTION)), Math.min(sortedCollection.length,index*MAX_COLLECTION + MAX_COLLECTION));
     let content = "";
     for(let i = 0; i < userCollection.length; i++){
