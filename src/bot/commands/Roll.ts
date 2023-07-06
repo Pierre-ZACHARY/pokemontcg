@@ -50,21 +50,34 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
 
         const confirmation = await msgEdited.awaitMessageComponent({ filter: collectorFilter, time: waitTime });
 
-        const [usr, defer] = await Promise.all([prisma.user.findUnique({
+        const [usr, defer, collection] = await Promise.all([prisma.user.findUnique({
             where: {
                 discordId: confirmation.user.id,
             }
-        }), confirmation.deferUpdate()]);
+        }), confirmation.deferUpdate(), prisma.collection.findFirst({
+            where: {
+                serverId: interaction.guildId!,
+                cardId: rolledcard.id,
+            },
+            include: {
+                user: true,
+            }
+        })]);
         if(!usr){
             await interaction.editReply({ content: '', components: [] });
             return;
         }
         if(usr.lastClaim && new Date(usr.lastClaim).getTime() > Date.now() - CLAIM_MINUTES * 60 * 1000){
-            await interaction.followUp({ content: lang.nextClaim.fmt(Math.ceil((new Date(usr.lastClaim).getTime()-(Date.now() - CLAIM_MINUTES * 60 * 1000))/(1000*60))), components: [] });
+            await interaction.followUp({ content: confirmation.user.toString()+", "+lang.nextClaim.fmt(Math.ceil((new Date(usr.lastClaim).getTime()-(Date.now() - CLAIM_MINUTES * 60 * 1000))/(1000*60))), components: [] });
             await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, rollstartTime, defaultFooter);
             return;
         }
         if(confirmation.customId === "addCollection"){
+            if(collection){
+                await interaction.followUp({ content: lang.alreadyInCollection.fmt(confirmation.user.username) });
+                await confirmation.editReply({ content: '', components: [] });
+                return;
+            }
             await Promise.all([prisma.collection.create({
                 data: {
                     cardId: rolledcard.id,
@@ -73,7 +86,7 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
                 }
             }),
                 interaction.followUp({
-                    content: lang.successClaim.fmt(i18n!.name, rolledcard.cardId),
+                    content: confirmation.user.toString()+", "+lang.successClaim.fmt(i18n!.name, rolledcard.cardId),
                     components: [],
                 }),prisma.user.update({
                 where: {
@@ -92,7 +105,7 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
                         }
                     }
                 })]);
-            await interaction.editReply({ content: '', components: [] });
+            await confirmation.editReply({ content: '', components: [] });
             return;
         }
         else{

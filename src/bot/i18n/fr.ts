@@ -24,6 +24,7 @@ class French extends Language {
         "Trier par : date d'obtention",
         "Seul {0} peut claim cette carte.",
         "Tout le monde",
+        "Cette carte est déjà dans la collection de {0}.",
         "Utilisation :" +
         "\n**/language <language>**: Définissez la langue du bot." +
         "\n**/roll**: Lancez une carte, max : " + MAX_ROLLS + " lancers toutes les " + ROLL_MINUTES + " minutes. Vous pouvez ajouter une carte à votre collection toutes les " + CLAIM_MINUTES + " minutes." +
