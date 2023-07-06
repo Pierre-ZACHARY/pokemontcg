@@ -50,7 +50,7 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
 
         const confirmation = await msgEdited.awaitMessageComponent({ filter: collectorFilter, time: waitTime });
 
-        const [usr, defer, collection] = await Promise.all([prisma.user.findUnique({
+        const [usr, defer, collection, lastClaim] = await Promise.all([prisma.user.findUnique({
             where: {
                 discordId: confirmation.user.id,
             }
@@ -62,22 +62,34 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
             include: {
                 user: true,
             }
+        }), prisma.collection.findFirst({
+            where: {
+                serverId: interaction.guildId!,
+                user: {
+                    discordId: confirmation.user.id
+                },
+            },
+            orderBy: {
+                obtainedAt: "desc",
+            }
         })]);
         if(!usr){
             await interaction.editReply({ content: '', components: [] });
             return;
         }
-        if(usr.lastClaim && new Date(usr.lastClaim).getTime() > Date.now() - CLAIM_MINUTES * 60 * 1000){
-            await interaction.followUp({ content: confirmation.user.toString()+", "+lang.nextClaim.fmt(Math.ceil((new Date(usr.lastClaim).getTime()-(Date.now() - CLAIM_MINUTES * 60 * 1000))/(1000*60))), components: [] });
+        if(collection){
+            await Promise.all([ interaction.followUp({ content: lang.alreadyInCollection.fmt(confirmation.user.username) }), confirmation.editReply({ content: '', components: [] })]);
+            return;
+        }
+        if(lastClaim && new Date(lastClaim.obtainedAt).getTime() > Date.now() - CLAIM_MINUTES * 60 * 1000){
+            const seconds = Math.ceil((new Date(lastClaim.obtainedAt).getTime()-(Date.now() - CLAIM_MINUTES * 60 * 1000))/(1000));
+            const minutes= Math.ceil((new Date(lastClaim.obtainedAt).getTime()-(Date.now() - CLAIM_MINUTES * 60 * 1000))/(1000*60));
+            const timeDisplay = minutes>0 ? minutes+"min" : seconds+"s";
+            await interaction.followUp({ content: confirmation.user.toString()+", "+lang.nextClaim.fmt(timeDisplay), components: [] });
             await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, rollstartTime, defaultFooter);
             return;
         }
         if(confirmation.customId === "addCollection"){
-            if(collection){
-                await interaction.followUp({ content: lang.alreadyInCollection.fmt(confirmation.user.username) });
-                await confirmation.editReply({ content: '', components: [] });
-                return;
-            }
             await Promise.all([prisma.collection.create({
                 data: {
                     cardId: rolledcard.id,
@@ -104,8 +116,7 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
                             serverId: interaction.guildId!,
                         }
                     }
-                })]);
-            await confirmation.editReply({ content: '', components: [] });
+                }), confirmation.editReply({ content: '', components: [] })]);
             return;
         }
         else{
@@ -236,8 +247,11 @@ export const Roll: Command = {
             let last4hPromisesOrdered = last4hPromises.sort((a, b) => {
                 return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
             });
+            const minutes=Math.ceil((new Date(last4hPromisesOrdered[0].datetime).getTime() + ROLL_MINUTES * 60 * 1000 - Date.now()) / 1000 / 60);
+            const seconds = Math.ceil((new Date(last4hPromisesOrdered[0].datetime).getTime() + ROLL_MINUTES * 60 * 1000 - Date.now()) / 1000);
+            const timeDisplay = minutes>0 ? minutes+"min" : seconds+"s";
             await interaction.followUp({
-                content: lang.nextRoll.fmt(MAX_ROLLS, ROLL_MINUTES, Math.ceil((new Date(last4hPromisesOrdered[0].datetime).getTime() + ROLL_MINUTES * 60 * 1000 - Date.now()) / 1000 / 60)),
+                content: lang.nextRoll.fmt(MAX_ROLLS, ROLL_MINUTES, timeDisplay),
                 ephemeral: true,
             });
             return;
