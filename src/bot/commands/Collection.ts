@@ -129,7 +129,8 @@ export const Collection: Command = {
             where: {
                 user: {
                     discordId: discordId
-                }
+                },
+                serverId: interaction.guildId!
             },
             include: {
                 card: {

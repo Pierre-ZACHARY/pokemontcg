@@ -310,9 +310,11 @@ export const Roll: Command = {
         }
 
         let content = "";
-        const allUsers = await client.guilds.cache.get(interaction.guildId!)!.members.fetch();
-        for(let i = 0; i < wishes.length; i++){
-            content += lang.wishedBy.fmt(allUsers.get(wishes[0].user.discordId)?.toString());
+        const allUsers = await interaction.guild?.members.fetch({user: wishes.map((wish) => wish.user.discordId)});
+        if(allUsers){
+            for(let user of allUsers){
+                content += lang.wishedBy.fmt(user.toString());
+            }
         }
 
         if(content!=""){
