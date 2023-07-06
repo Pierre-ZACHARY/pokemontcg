@@ -20,13 +20,15 @@ export const MAX_ROLLS = 30;
 export const PUBLIC_CLAIM_SECONDS = 5;
 async function listenButton(msg: Message<boolean>, interaction: CommandInteraction, client: Client, rolledcard: any,  prismaUser: any, i18n: any, lang: Language, rollstartTime: Date, defaultFooter: string = ""){
 
-    const timeUntilAnyoneCanClaimInSeconds = Math.max(0, rollstartTime.getSeconds() + PUBLIC_CLAIM_SECONDS - new Date().getSeconds()-1);
-    const waitTime = timeUntilAnyoneCanClaimInSeconds>0 ? timeUntilAnyoneCanClaimInSeconds*1000 : rollstartTime.getMilliseconds()+60*1000;
+    // @ts-ignore
+    const timeUntilAnyoneCanClaimInSeconds = Math.max(0, (rollstartTime- new Date())/1000 + PUBLIC_CLAIM_SECONDS);
+    // @ts-ignore
+    const waitTime = timeUntilAnyoneCanClaimInSeconds>0 ?  ((rollstartTime- new Date()) + PUBLIC_CLAIM_SECONDS*1000) : (60000-((new Date())- (rollstartTime)));
     if(waitTime<= 0){
         await interaction.editReply({ content: '', components: [] });
         return;
     }
-    const anyoneCanClaim = timeUntilAnyoneCanClaimInSeconds <= 0;
+    const anyoneCanClaim = timeUntilAnyoneCanClaimInSeconds <= 0.1;
     const collectorFilter = (i: any) =>
     {
         if(anyoneCanClaim){
@@ -97,8 +99,8 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
             await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, rollstartTime, defaultFooter); // listen again
         }
     } catch (e) {
-        const timeUntilAnyoneCanClaimInSeconds = Math.max(0, rollstartTime.getSeconds() + PUBLIC_CLAIM_SECONDS - new Date().getSeconds());
-        const waitTime = Math.max(rollstartTime.getMilliseconds()+60*1000, timeUntilAnyoneCanClaimInSeconds*1000);
+        // @ts-ignore
+        const waitTime = Math.max(60000-((new Date())- (rollstartTime)), ((rollstartTime- new Date()) + PUBLIC_CLAIM_SECONDS*1000));
 
         if(waitTime>0){
             // happens when no claim in 15 seconds
@@ -300,7 +302,7 @@ export const Roll: Command = {
                 name: ownerDiscordUser.username,
                 iconURL: ownerDiscordUser.avatarUrl,
             })
-            await msg.edit({
+            await interaction.editReply({
                 content: lang.ownedBy.fmt(ownerDiscordUser.username),
                 embeds: [embed],
             });
