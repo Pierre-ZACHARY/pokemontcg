@@ -21,7 +21,7 @@ export class Language{
         public ownedBy: string = "Owned by {0} \n",
         public sortByExtension: string = "Sort by : extension",
         public sortByOptainedAt: string = "Sort by : obtained date",
-        public ownerCanClaim: string = "Only {0} can claim this card.",
+        public ownerCanClaim: string = "Only {0} can claim this card right now.",
         public anyoneCanClaim: string = "Everyone",
         public alreadyInCollection: string = "Card already in {0} collection.",
         public helpMessage: string = "Usage:" +

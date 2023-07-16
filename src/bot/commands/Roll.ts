@@ -49,6 +49,11 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
             },] });
 
         const confirmation = await msgEdited.awaitMessageComponent({ filter: collectorFilter, time: waitTime });
+        if(confirmation.user.id !== interaction.user.id && !anyoneCanClaim){
+            await confirmation.reply({ content: lang.ownerCanClaim.fmt(interaction.user.username), ephemeral: true });
+            await listenButton(msg, interaction, client, rolledcard, prismaUser, i18n, lang, rollstartTime, defaultFooter); // listen again
+            return;
+        }
 
         const [usr, defer, collection, lastClaim] = await Promise.all([prisma.user.findUnique({
             where: {
@@ -94,15 +99,15 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
                 data: {
                     cardId: rolledcard.id,
                     serverId: interaction.guildId!,
-                    userId: prismaUser.id,
-                }
+                    userId: usr.id,
+                },
             }),
                 interaction.followUp({
                     content: confirmation.user.toString()+", "+lang.successClaim.fmt(i18n!.name, rolledcard.cardId),
                     components: [],
                 }),prisma.user.update({
                 where: {
-                    id: prismaUser.id,
+                    id: usr.id,
                 },
                 data: {
                     lastClaim: new Date(),
@@ -112,7 +117,7 @@ async function listenButton(msg: Message<boolean>, interaction: CommandInteracti
                     where: {
                         cardId_userId_serverId: {
                             cardId: rolledcard.id,
-                            userId: prismaUser.id,
+                            userId: usr.id,
                             serverId: interaction.guildId!,
                         }
                     }

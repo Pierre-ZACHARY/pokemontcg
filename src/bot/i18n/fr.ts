@@ -22,7 +22,7 @@ class French extends Language {
         "Possédé par {0} \n",
         "Trier par : extension",
         "Trier par : date d'obtention",
-        "Seul {0} peut claim cette carte.",
+        "Seul {0} peut claim cette carte pour l'instant.",
         "Tout le monde",
         "Cette carte est déjà dans la collection de {0}.",
         "Utilisation :" +
